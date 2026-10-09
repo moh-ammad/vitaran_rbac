@@ -1,0 +1,165 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+}
+
+enum ResourceType {
+  BOOK
+  QUESTION_PAPER
+}
+
+model User {
+  id                 String              @id @default(uuid())
+  email              String              @unique
+  password           String
+  name               String?
+  status             AccountStatus       @default(PENDING)
+  roleId             String?
+  role               Role?               @relation(fields: [roleId], references: [id])
+  teacherAssignments TeacherAssignment[]
+  enrollments        StudentEnrollment[]
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  isSystem    Boolean  @default(false) // protects seeded role from deletion
+  isActive    Boolean  @default(true)
+  users          User[]
+  permissions    RolePermission[]
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Permission {
+  id          String           @id @default(uuid())
+  key         String           @unique
+  name        String
+  description String?
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+model ClassGroup {
+  id           String              @id @default(uuid())
+  name         String              @unique
+  grade        Int
+  subjects     ClassSubject[]
+  teachers     TeacherAssignment[]
+  students     StudentEnrollment[]
+  resources    ResourceClass[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model Subject {
+  id           String              @id @default(uuid())
+  name         String              @unique
+  isActive     Boolean             @default(true)
+  classLinks   ClassSubject[]
+  resources    Resource[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+model ClassSubject {
+  id          String              @id @default(uuid())
+  classId     String
+  subjectId   String
+  classGroup  ClassGroup          @relation(fields: [classId], references: [id], onDelete: Cascade)
+  subject     Subject             @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  teachers    TeacherAssignment[]
+  resources   Resource[]
+
+  @@unique([classId, subjectId])
+  @@index([subjectId])
+}
+
+model TeacherAssignment {
+  userId        String
+  classId       String
+  classSubjectId String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classGroup    ClassGroup  @relation(fields: [classId], references: [id], onDelete: Cascade)
+  classSubject  ClassSubject @relation(fields: [classSubjectId], references: [id], onDelete: Cascade)
+
+  @@id([userId, classSubjectId])
+  @@index([classId])
+}
+
+model StudentEnrollment {
+  userId     String
+  classId    String
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([userId, classId])
+}
+
+model Resource {
+  id            String         @id @default(uuid())
+  title         String
+  description   String?
+  type          ResourceType
+  subjectId     String?
+  classSubjectId String?
+  subject       Subject?       @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  classSubject  ClassSubject?  @relation(fields: [classSubjectId], references: [id], onDelete: SetNull)
+  classes       ResourceClass[]
+  questions     ResourceQuestion[]
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([type])
+  @@index([subjectId])
+  @@index([classSubjectId])
+}
+
+model ResourceQuestion {
+  id         String   @id @default(uuid())
+  resourceId String
+  prompt     String
+  options    Json?
+  answer     String?
+  order      Int      @default(0)
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@index([resourceId, order])
+}
+
+model ResourceClass {
+  resourceId String
+  classId    String
+  resource   Resource   @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  classGroup ClassGroup @relation(fields: [classId], references: [id], onDelete: Cascade)
+
+  @@id([resourceId, classId])
+}
